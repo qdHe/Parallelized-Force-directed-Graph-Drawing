@@ -9,7 +9,7 @@ We are going to parallelize a forced-directed graph drawing algorithm that consi
 
 _Graph drawing_ shows a graph based on the topological relationship between vertices and edges. One category of typical algorithms to draw graphs in an aesthetically-pleasing way is called forced-directed graph drawing. The idea of a force directed layout algorithm is to consider a force between any two nodes. In this project, we want to implement and optimize a specific version called Fruchterman-Reingold. The nodes are represented by steel rings and the edges are springs between them. The attractive force is analogous to the spring force and the repulsive force is analogous to the electrical force. The basic idea is to minimize the energy of the system by moving the nodes and changing the forces between them.
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/2/22/SocialNetworkAnalysis.png" alt="img0" width="800" align="middle" />
+<img src="https://github.com/qdHe/15618-final-project/blob/master/images/SocialNetworkAnalysis.png" alt="img0" width="800" align="middle" />
 
 Suppose k is , attractive force is:
 
