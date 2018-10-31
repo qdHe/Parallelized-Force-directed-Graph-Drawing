@@ -1,24 +1,33 @@
-# CUDA forced-directed graph drawing - Project Proposal
+# CUDA forced-directed graph drawing
+# Project Proposal
 Parallel network data visualization using GPU.
+
+## URL
+https://qdhe.github.io/15618-final-project/
 
 ## Summary
 
-We are going to parallelize a forced-directed graph drawing algorithm that consider a force between two nodes to draw a aesthetically-pleasig graph. We will compare the speedup and quality of our parallel algorithm with the sequential version.
+We are going to parallelize a forced-directed graph algorithm that considers force between two nodes to draw a aesthetically-pleasing graph on NVIDIA GPUs. We will compare the speedup and quality of our parallel algorithm with the sequential version.
 
 ## Background
 
-_Graph drawing_ shows a graph based on the topological relationship between vertices and edges. One category of typical algorithms to draw graphs in an aesthetically-pleasing way is called forced-directed graph drawing. The idea of a force directed layout algorithm is to consider a force between any two nodes. In this project, we want to implement and optimize a specific version called Fruchterman-Reingold. The nodes are represented by steel rings and the edges are springs between them. The attractive force is analogous to the spring force and the repulsive force is analogous to the electrical force. The basic idea is to minimize the energy of the system by moving the nodes and changing the forces between them.
+_Graph drawing_ shows a graph based on the topological relationship between vertices and edges. One category of typical algorithms to draw graphs in an aesthetically-pleasing way is forced-directed method. The idea of a force-directed layout algorithm is to consider a force between any two nodes. 
+In this project, we want to implement and optimize a specific version called Fruchterman-Reingold. The nodes are represented by steel rings and the edges are springs between them. The attractive force is analogous to the spring force and the repulsive force is analogous to the electrical force. The basic goal is to minimize the energy of the system by moving the nodes and changing the forces between them. The following image is an example - Social network visualization.
 
 <img src="https://github.com/qdHe/15618-final-project/blob/master/images/SocialNetworkAnalysis.png" alt="img0" width="800" align="middle" />
 
-Suppose k is , attractive force is:
+Suppose _k_ is the constant describing the optimal length of edge, and _d_ is the distance between two nodes. 
 
-~~~ golang
+Attractive force is _fa(x) := return x^2/k_
+
+Repulsive force is _fr(x) := return k^2/x_
+
+The algorithm initially assigns each vertex a random position. It iteratively calculates the repulsive force between all pairs of vertices and the attractive force for each edge. Position of vertex is changed based on the resultant force vector it receives. The algorithm ends when all vertex positions do not change or the number of iterations exceeds a certain threshold.
+
+Pseudocode:
+~~~ java
 area := W * L; //W and L are the width and length of the frame
-G := (V, E); //the vertices are assigned random initial positions 
-k :=  sqrt(area/V)    
-func fa(x) := return x^2/k 
-func fr(x) := return k^2/x
+G := (V, E); //the vertices are assigned random initial positions     
 for i := 1 -> iterations
     //calculate repulsive forces
     for v in V //each vertex has two vectors: .pos and .disp
@@ -45,7 +54,7 @@ for i := 1 -> iterations
 
 
 ## Challenges
-The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. In other words, the time complexity of computation is O(n^3), which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
+The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. In other words, the time complexity of computation is O(ln^2) for _l_ iterations, which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
 
 The second challenge is how to assign jobs evenly. Since the connectivity of nodes varies from each other. The amount of work for a node with many edges is different from a node with few edges when computing attractive power. And the position of each node affects the caculation it needs, too.  Since nodes will move during two iterations, the cost and communication patterns will also change over time. 
 
@@ -59,6 +68,7 @@ To update one node, we need to calculate all nodes within a certain distance. Ho
 Sychronization needs to be done after each iteration. When computing movement of a node, the previous positions of other nodes are needed, which will be communicated through shared memory. When dataset is large, the edges between nodes might be too large to fit in shared memory. So there will also be communication between global memory and shard memory inside each CUDA blocks. 
 
 
+
 ## Resources
 We will build the program from scratch in C++. We follow the guidance from the following references:
 
@@ -70,16 +80,15 @@ We will build the program from scratch in C++. We follow the guidance from the f
 
 We also need NVIDIA GPU resourse as we want to parallel the algorithm through CUDA.
 
-## Goals and Deiverables
 
+## Goals and Deiverables
 ### Plan to achieve
-- 1: Write the CUDA version of force-directed algorithm and run on GPU.
-- 2: Parallelize the algorithm and greatly imrpove the performance. 
-- 3: The complexity of the original algorithm is O(n^3), we will reduce the total complexity using algorithm such as QuadTree.
+- 1: Write the CUDA parallelized version of force-directed algorithm and run on GPU.
+- 2: The complexity of the original algorithm is O(ln^2) for l iterations, we will reduce the total complexity and do some speed-quality tradeoff.
 
 ### Hope to achieve
-- 1: Propose massive data in real time.
-- 2: Write the parallel CPU version of force-directed algorithm with OpenMP and run on Xeon Phi. Compare the performance of parallel GPU version and CPU version.
+- 1: Process massive data in real time.
+- 2: Write the parallelized CPU version of force-directed algorithm with OpenMP and run on Xeon Phi. Compare the performance of parallel GPU version and CPU version.
 
 ### Demo
 - 1: We will show our speedup graphs which compare the performance of different versions of algorithms/different size of input data.
@@ -90,31 +99,32 @@ We also need NVIDIA GPU resourse as we want to parallel the algorithm through CU
 
 We plan to use the Latedays cluster to run our code, which will use Tesla K40 GPU. One of the main disadvantage of force-directed algorithms is high running time with large amounts of data. Therefore, we want to parallelize the algorithm with GPU to imrpove the performance as GPU has good ability of computing and parallel. Also, Latedays has Xeon Phi which enables parallel through OpenMP as well. For consistency, we will also run the sequential version on Latedays. 
 
+
 ## Schedule
 
 * **Week 1 11.5--11.11**
 
-Understand the algorithm and the code in C++ boost library. Start the sequential implementation in C++.
+> Understand the algorithm and the code in C++ boost library. Start the sequential implementation in C++.
 
 * **Week 2 11.12--11.18**
 
-Finish the sequential version of the program and analyze the performance by fine-grained timing. Identify the bottleneck and come up with an approach to parallelize the program.
+> Finish the sequential version of the program and analyze the performance by fine-grained timing. Identify the bottleneck and come up with an approach to parallelize the program. Start programming the parallel version of the program.
 
 * **Week 3 11.19--11.25**
-
-Start programming the parallel version of the program.
+> Iterate on the parallel version. Try to optimize the complexity through algorithms such as Barnes-Hut, k-d tree or quad-tree.
 
 * **Week 4 11.26--12.2**
 
-Iterate on the parallel version and optimize performance.
+> Iterate on the parallel version. Try some other methods shuch as spatial hashing.
 
 * **Week 5 12.3--12.9**
 
-Finish parallelizing the program and generate results. If there is time left, write the parallel CPU version using OpenMP and compare performance.
+> Finish parallelizing the program and generate results. If there is time left, write the parallel CPU version using OpenMP and compare performance.
 
 * **Week 6 12.10--12.16**
 
-Wrap up the project. Write final report. Prepare video and poster for demo.
+> Wrap up the project. Write final report. Prepare video and poster for demo.
+
 
 
 ## Authors
