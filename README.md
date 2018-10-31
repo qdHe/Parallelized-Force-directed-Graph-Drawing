@@ -1,6 +1,10 @@
-# CUDA forced-directed graph drawing
-# Project Proposal
+# CUDA forced-directed graph drawing - Project Proposal
 Parallel network data visualization using GPU.
+
+## Authors
+* **Qidu He** -  [qiduh]
+* **Di Jin** -  [djin2]
+
 
 ## URL
 https://qdhe.github.io/15618-final-project/
@@ -126,8 +130,3 @@ We plan to use the Latedays cluster to run our code, which will use Tesla K40 GP
 > Wrap up the project. Write final report. Prepare video and poster for demo.
 
 
-
-## Authors
-
-* **Qidu He** -  [qiduh]
-* **Di Jin** -  [djin2]
