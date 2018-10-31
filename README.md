@@ -1,60 +1,45 @@
-## Welcome to GitHub Pages
-
-You can use the [editor on GitHub](https://github.com/qdHe/15618-final-project/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
-
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
-
-### Markdown
-
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
-
-```markdown
-Syntax highlighted code block
-
-# Header 1
-## Header 2
-### Header 3
-
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/qdHe/15618-final-project/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
-
-# CUDA Fruchterman-Reingold - Project Proposal
-
+# CUDA forced-directed graph drawing - Project Proposal
 Parallel network data visualization using GPU.
 
 ## Summary
 
-We are going to parallelize an image stitching program that aligns a set of images and stitch them together to produce a panorama. We will compare the speedup and quality of our parallel algorithm with the sequential version.
+We are going to parallelize a forced-directed graph drawing algorithm that consider a force between two nodes to draw a aesthetically-pleasig graph. We will compare the speedup and quality of our parallel algorithm with the sequential version.
 
 ## Background
 
 _Graph drawing_ shows a graph based on the topological relationship between vertices and edges. One category of typical algorithms to draw graphs in an aesthetically-pleasing way is called forced-directed graph drawing. The idea of a force directed layout algorithm is to consider a force between any two nodes. In this project, we want to implement and optimize a specific version called Fruchterman-Reingold. The nodes are represented by steel rings and the edges are springs between them. The attractive force is analogous to the spring force and the repulsive force is analogous to the electrical force. The basic idea is to minimize the energy of the system by moving the nodes and changing the forces between them.
 
-<img src="https://user-images.githubusercontent.com/16803685/32248395-f8698b64-be5b-11e7-933c-25ecd84771af.png" alt="img0" width="800" align="middle" />
+<img src="" alt="img0" width="800" align="middle" />
 
 Suppose k is , attractive force is:
-re
-算法初始时给每个顶点分配一个随机位置(可以组成圆形，可以是网格，也可以是其他布局算法的输出结果，但不能排在一条直线上(想一想为什么))，核心是个迭代过程，计算出所有点对间的斥力，再对于每个顶点，考虑和它关连的弹簧对它产生的引力。每一轮迭代枚举每个顶点，根据它受到的合力向量让它的位置发生改变。当所有顶点位置不发生改变或者迭代次数超过预设的某个阈值后算法结束。
-伪代码如下：
 
+~~~ golang
+area := W * L; //W and L are the width and length of the frame
+G := (V, E); //the vertices are assigned random initial positions 
+k :=  sqrt(area/V)    
+func fa(x) := return x^2/k 
+func fr(x) := return k^2/x
+for i := 1 -> iterations
+    //calculate repulsive forces
+    for v in V //each vertex has two vectors: .pos and .disp
+        v.disp := 0; 
+        for u in V
+            d := v.pos - u.pos
+            v.disp += (d/|d|) * fr(|d|)
+    //calculate attractive forces
+    for e in E //each edge is an ordered pair of vertices .v and .u 
+        d := e.v.pos – e.u.pos 
+        e.v.disp –= (d/|d|) * fa(|d|) 
+        e.u.disp += (d/|d|) * fa(|d|)
+    //limit the maximum displacement to the temperature t
+    //prevent from being displaced outside frame
+    for v in V
+        v.pos += (v.disp/|v.disp|) * min(v.disp, t)
+        v.pos.x = min(W/2, max(-W/2, v.pos.x))
+        v.pos.y = min(L/2, max(–L/2, v.pos.y)) 
+    //reduce the temperature as the layout approaches a better configuration
+    t := cool(t)
+~~~
 
 
 
@@ -136,4 +121,3 @@ Wrap up the project. Write final report. Prepare video and poster for demo.
 
 * **Qidu He** -  [qiduh]
 * **Di Jin** -  [djin2]
-
