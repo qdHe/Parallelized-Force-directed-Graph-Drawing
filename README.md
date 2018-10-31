@@ -58,7 +58,7 @@ for i := 1 -> iterations
 
 
 ## Challenges
-The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. In other words, the time complexity of computation is O(ln^2) for _l_ iterations, which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
+The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. In other words, the time complexity of computation is O(mn^2) for _m_ iterations, which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
 
 The second challenge is how to assign jobs evenly. Since the connectivity of nodes varies from each other. The amount of work for a node with many edges is different from a node with few edges when computing attractive power. And the position of each node affects the caculation it needs, too.  Since nodes will move during two iterations, the cost and communication patterns will also change over time. 
 
@@ -88,7 +88,7 @@ We also need NVIDIA GPU resourse as we want to parallel the algorithm through CU
 ## Goals and Deiverables
 ### Plan to achieve
 - 1: Write the CUDA parallelized version of force-directed algorithm and run on GPU.
-- 2: The complexity of the original algorithm is O(ln^2) for l iterations, we will reduce the total complexity and do some speed-quality tradeoff.
+- 2: The complexity of the original algorithm is O(mn^2) for m iterations, we will reduce the total complexity and do some speed-quality tradeoff.
 
 ### Hope to achieve
 - 1: Process massive data in real time.
