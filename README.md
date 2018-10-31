@@ -45,18 +45,18 @@ for i := 1 -> iterations
 
 
 ## Challenges
+The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. The amount of caculation for each iteration grows quadratically with the number of input nodes, which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
 
-The first challenge is that how to assign jobs evenly, since the amount of work per body is not uniform in each iteration. The amount of work for a body in a group with multiple of bodies is different from a body that's far away with most of the body groups. Also, bodies will move during two iterations. So the cost and communication patterns will also change over time. 
-The second challenge is that how to handle collision between different bodies. Currently, our team hasn't decided how to handle this case. If we need to consider collision in this problem, it will make it more challenging, because the position update of one body may need to consider other bodies' influence and re-calculate where the body will go after that. 
+The second challenge is how to assign jobs evenly. Since the connectivity of nodes varies from each other. The amount of work for a node with many edges is different from a node with few edges when computing attractive power. And the position of each node affects the caculation it needs, too.  Since nodes will move during two iterations, the cost and communication patterns will also change over time. 
 
 ### Dependency
-
+Each iteration is depending on the iteration before. 
 
 ### Memory Access
-
+To update one node, we need to calculate all nodes within a certain distance. However, the positions of each node change frequently. As a result, time locality and space locality is poor. To reduce cache misses, we plan to order the node array or construct a Barnes–Hut tree before each iteration.
 
 ### Communication
-
+Sychronization needs to be done after each iteration. When computing movement of a node, the previous positions of other nodes are needed. 
 
 
 ## Resources
