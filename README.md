@@ -9,7 +9,7 @@ We are going to parallelize a forced-directed graph drawing algorithm that consi
 
 _Graph drawing_ shows a graph based on the topological relationship between vertices and edges. One category of typical algorithms to draw graphs in an aesthetically-pleasing way is called forced-directed graph drawing. The idea of a force directed layout algorithm is to consider a force between any two nodes. In this project, we want to implement and optimize a specific version called Fruchterman-Reingold. The nodes are represented by steel rings and the edges are springs between them. The attractive force is analogous to the spring force and the repulsive force is analogous to the electrical force. The basic idea is to minimize the energy of the system by moving the nodes and changing the forces between them.
 
-<img src="" alt="img0" width="800" align="middle" />
+<img src="https://en.wikipedia.org/wiki/Force-directed_graph_drawing#/media/File:SocialNetworkAnalysis.png" alt="img0" width="800" align="middle" />
 
 Suppose k is , attractive force is:
 
@@ -45,7 +45,7 @@ for i := 1 -> iterations
 
 
 ## Challenges
-The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. The amount of caculation for each iteration grows quadratically with the number of input nodes, which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
+The first challenge is how to handle the massive dataset. Assume we have n nodes, each iteration we need to calculate forces between n^2 pairs of nodes and the number of iterations it takes to converge is approximately n. In other words, the time complexity of computation is O(n^3), which is unacceptable for large datasets. To achive nearly realtime computation for those dataset, we need to trade off between performance and quality, by applying approximation methods like Barnes–Hut.
 
 The second challenge is how to assign jobs evenly. Since the connectivity of nodes varies from each other. The amount of work for a node with many edges is different from a node with few edges when computing attractive power. And the position of each node affects the caculation it needs, too.  Since nodes will move during two iterations, the cost and communication patterns will also change over time. 
 
@@ -56,7 +56,7 @@ Each iteration is depending on the iteration before.
 To update one node, we need to calculate all nodes within a certain distance. However, the positions of each node change frequently. As a result, time locality and space locality is poor. To reduce cache misses, we plan to order the node array or construct a Barnes–Hut tree before each iteration.
 
 ### Communication
-Sychronization needs to be done after each iteration. When computing movement of a node, the previous positions of other nodes are needed. 
+Sychronization needs to be done after each iteration. When computing movement of a node, the previous positions of other nodes are needed, which will be communicated through shared memory. 
 
 
 ## Resources
