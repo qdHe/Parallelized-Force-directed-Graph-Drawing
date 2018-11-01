@@ -41,15 +41,15 @@ for i := 1 -> iterations
             v.disp += (d/|d|) * fr(|d|)
     //calculate attractive forces
     for e in E //each edge is an ordered pair of vertices .v and .u 
-        d := e.v.pos – e.u.pos 
-        e.v.disp –= (d/|d|) * fa(|d|) 
+        d := e.v.pos - e.u.pos 
+        e.v.disp -= (d/|d|) * fa(|d|) 
         e.u.disp += (d/|d|) * fa(|d|)
     //limit the maximum displacement to the temperature t
     //prevent from being displaced outside frame
     for v in V
         v.pos += (v.disp/|v.disp|) * min(v.disp, t)
         v.pos.x = min(W/2, max(-W/2, v.pos.x))
-        v.pos.y = min(L/2, max(–L/2, v.pos.y)) 
+        v.pos.y = min(L/2, max(-L/2, v.pos.y)) 
     //reduce the temperature as the layout approaches a better configuration
     t := cool(t)
 ~~~
