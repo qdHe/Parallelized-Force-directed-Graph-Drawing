@@ -5,7 +5,7 @@
 #include <cmath>
 using namespace std;
 
-#define K 0.01
+#define K 0.1
 #define W 10
 #define H 10
 
@@ -26,11 +26,11 @@ float min(float a, float b){
     return (a<b)? a:b;
 }
 inline float repulsive_force(float dist){
-    return dist*dist/K;
+    return K*K/dist/10000;
 }
 
 inline float attractive_force(float dist){
-    return K*K/dist;
+    return dist*dist/K/10000;
 }
 
 void force_directed(Vertex *V, int **E, int N, int Iteration, float thr){
@@ -41,8 +41,10 @@ void force_directed(Vertex *V, int **E, int N, int Iteration, float thr){
                 float d_x = V[v].x-V[u].x;
                 float d_y = V[v].y-V[u].y;
                 float dist = sqrt(d_x*d_x+d_y*d_y);
+                dist = max(dist, 0.0001);
                 float rf = repulsive_force(dist);
                 float af = E[v][u]*attractive_force(dist);
+                //if(v%1000 && u%1000) cout<<rf<<' '<<af<<' '<<dist<<endl;
                 V[v].disp_x += d_x/dist*(rf-af);
                 V[v].disp_y += d_y/dist*(rf-af);
                 V[u].disp_x += d_x/dist*(af-rf);
@@ -50,6 +52,7 @@ void force_directed(Vertex *V, int **E, int N, int Iteration, float thr){
             }
         }
         for(int v=0; v<N; ++v){
+            //if(v%1000==0) cout<<V[v].disp_x<<' '<<V[v].disp_y<<endl;
             float dist = sqrt(V[v].disp_x*V[v].disp_x + V[v].disp_y*V[v].disp_y);
             V[v].x += (dist > thr)? V[v].disp_x/dist*thr : V[v].disp_x;
             V[v].y += (dist > thr)? V[v].disp_y/dist*thr : V[v].disp_y;
@@ -81,5 +84,10 @@ int main() {
     int iteration = 10;
     int thr = 1;
     force_directed(V, E, N, iteration, thr);
+    ofstream outfile("Vertex_Pos.txt");
+    for (int v=0; v<N; ++v){
+        outfile << V[v].x <<' '<<V[v].y<<endl;
+    }
+    outfile.close(); 
     return 0;
 }
