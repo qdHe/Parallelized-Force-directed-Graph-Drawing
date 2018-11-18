@@ -54,6 +54,7 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
     for(int itr=0; itr<Iteration; ++itr){
         //if (itr%(Iteration/10) == 0) cout << "Iteration = " << itr+1 << endl;
         for(int v=0; v<N; ++v){
+			if(v==0) printf("End1:(%f,%f)\n", V[v].x, V[v].y);
             for(int u=v+1; u<N; ++u){
                 float d_x = V[v].x-V[u].x;
                 float d_y = V[v].y-V[u].y;
