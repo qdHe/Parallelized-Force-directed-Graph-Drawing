@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+//#include <chrono>
 #include <algorithm>
 #include <stdlib.h>
 #include <math.h>
@@ -10,10 +11,7 @@ using namespace std;
 
 #define W 10
 #define H 10
-#define BLOCK_SIZE 16
-int N = 25;//tentative
-int M = 35;
-int K = sqrt(W*H/N);
+#define BLOCK_SIZE 256
 
 struct GlobalConstants{
 	int N;
@@ -71,10 +69,8 @@ __global__ void kernelForceDirected(float  *V, int *E, int *Idx){
 	if(v >= deviceParams.N) return;
 	float disp_x, disp_y;
 	float2 end1 = *(float2*)(&V[2*v]), end2;
-   
 	for(int itr=0; itr<deviceParams.Iteration; ++itr){
         //if (itr%(Iteration/10) == 0) cout << "Iteration = " << itr+1 << endl;
-        if(v==0) printf("End1:(%f,%f)\n", end1.x, end1.y);
 		disp_x = 0;
 		disp_y = 0;
 		end1 = *(float2*)(&V[2*v]);
@@ -85,7 +81,7 @@ __global__ void kernelForceDirected(float  *V, int *E, int *Idx){
                 float dist = sqrt(d_x*d_x+d_y*d_y);
                 dist = max(dist, 0.001);
                 float rf = repulsive_force(dist);
-				//if(v==0) printf("u=%d, repulsive_force= %f\n", u, rf);
+				//if(v==10) printf("u=%d, repulsive_force= %f\n", u, rf);
                 //if(v%1000 && u%1000) cout<<rf<<' '<<af<<' '<<dist<<endl;
 				disp_x += d_x/dist*rf;//disp_x
                 disp_y += d_y/dist*rf;//disp_y
@@ -102,7 +98,7 @@ __global__ void kernelForceDirected(float  *V, int *E, int *Idx){
                     float dist = sqrt(d_x*d_x+d_y*d_y);
                     dist = max(dist, 0.001);
                     float af = attractive_force(dist);
-					//if(v==0) printf("u=%d, att_force= %f\n", u, af);
+					//if(v==24) printf("e=%d, u=%d, att_force= %f\n", e, u, af);
                     disp_x -= d_x/dist*af;
                     disp_y -= d_y/dist*af;
                 }
@@ -115,6 +111,7 @@ __global__ void kernelForceDirected(float  *V, int *E, int *Idx){
             end1.x = min(W/2., max(-W/2.,end1.x));
             end1.y = min(H/2., max(-H/2.,end1.y));
 			*(float2*)&V[2*v] = end1;
+			//if(v==24) printf("End1:(%f,%f)\n", end1.x, end1.y);
         __syncthreads();
         thr *= 0.99;
     }
@@ -123,29 +120,36 @@ __global__ void kernelForceDirected(float  *V, int *E, int *Idx){
 
 
 int main(int argc, char* argv[]) {
-    Vertex *V = new Vertex[N];
+
+	//using namespace std::chrono;
+	//typedef std::chrono::high_resolution_clock Clock;
+	//typedef std::chrono::duration<double> dsec;
+
+	int N, M;
+    
+	ifstream infile;
+    infile.open(argv[1]);
+	infile >> N >> M;
+
+	Vertex *V = new Vertex[N];
     Edge *E = new Edge[2*M];
     int *Idx = new int[N]();
 
-    ifstream infile;
-	cout<<argv[0]<<endl;
-    infile.open(argv[1]);
-    //int idx1, idx2, w;
-    int ct = 0;
     Edge e;
-    while(!infile.eof()){
+    for(int i=0; i<2*M; i+=2){
         infile >> e.idx1 >> e.idx2;
-        //cout<<idx1<<' '<<idx2<<endl;
-        E[ct++] = e;
+		//cout<<e.idx1<<' '<<e.idx2<<endl;
+        E[i] = e;
         swap(e.idx1, e.idx2);
-        E[ct++] = e;
+        E[i+1] = e;
     }
-    sort(E, E+ct, cmp);
-    cout << "Total Edges = " << ct/2 << endl;
-	//for(int i=0; i<20; ++i){
+    sort(E, E+2*M, cmp);
+	float K = sqrt(1.0*W*H/N);
+    cout << "Total Edges = " << M << endl;
+	//for(int i=0; i<2*M; ++i){
 	//	cout<<E[i].idx1<<' '<<E[i].idx2<<endl;
 	//}
-    for(int i=0; i<ct; ++i) {
+    for(int i=0; i<2*M; ++i) {
         Idx[E[i].idx1] += 1;
     }
 	//cout<<"IDX:[";
@@ -163,10 +167,10 @@ int main(int argc, char* argv[]) {
     int *deviceEdge;
     int *deviceIdx;
     cudaMalloc(&deviceVertex, sizeof(float)*2*N);
-    cudaMalloc(&deviceEdge, sizeof(int)*2*M);
+    cudaMalloc(&deviceEdge, sizeof(int)*4*M);
     cudaMalloc(&deviceIdx, sizeof(int)*N);
     cudaMemcpy(deviceVertex, V, sizeof(int)*2*N, cudaMemcpyHostToDevice);
-    cudaMemcpy(deviceEdge, E, sizeof(int)*2*M, cudaMemcpyHostToDevice);
+    cudaMemcpy(deviceEdge, E, sizeof(int)*4*M, cudaMemcpyHostToDevice);
     cudaMemcpy(deviceIdx, Idx, sizeof(int)*N, cudaMemcpyHostToDevice);
 	
 	GlobalConstants params;
@@ -178,11 +182,13 @@ int main(int argc, char* argv[]) {
 	cudaMemcpyToSymbol(deviceParams, &params, sizeof(GlobalConstants));
     dim3 blockDim(BLOCK_SIZE);
     dim3 gridDim((N+BLOCK_SIZE-1)/BLOCK_SIZE);
+    //auto calc_start = Clock::now();
     kernelForceDirected<<<gridDim, blockDim>>>(deviceVertex, deviceEdge,
 				deviceIdx);
     cudaDeviceSynchronize();
+    //double calc_time = duration_cast<dsec>(Clock::now() - calc_start).count();
 
-    cudaMemcpy(V, deviceVertex, sizeof(int)*2*N,  cudaMemcpyDeviceToHost);
+    cudaMemcpy(V, deviceVertex, sizeof(float)*2*N,  cudaMemcpyDeviceToHost);
     cudaFree(deviceVertex);
     cudaFree(deviceEdge);
     cudaFree(deviceIdx);

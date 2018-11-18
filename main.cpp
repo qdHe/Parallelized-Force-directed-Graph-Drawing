@@ -9,7 +9,7 @@ using namespace std;
 #define H 10
 int N = 25;//tentative
 int M = 35;
-int K = sqrt(W*H/N);
+float K = sqrt(1.0*W*H/N);
 
 class Vertex{
 public:
@@ -54,8 +54,7 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
     for(int itr=0; itr<Iteration; ++itr){
         //if (itr%(Iteration/10) == 0) cout << "Iteration = " << itr+1 << endl;
         for(int v=0; v<N; ++v){
-			if(v==0) printf("End1:(%f,%f)\n", V[v].x, V[v].y);
-            for(int u=v+1; u<N; ++u){
+            for(int u=0; u<N; ++u){
                 float d_x = V[v].x-V[u].x;
                 float d_y = V[v].y-V[u].y;
                 float dist = sqrt(d_x*d_x+d_y*d_y);
@@ -64,8 +63,6 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
                 //if(v%1000 && u%1000) cout<<rf<<' '<<af<<' '<<dist<<endl;
                 V[v].disp_x += d_x/dist*rf;
                 V[v].disp_y += d_y/dist*rf;
-                V[u].disp_x -= d_x/dist*rf;
-                V[u].disp_y -= d_y/dist*rf;
             }
             if (v == 0){
                 for(int e=0; e<Idx[v]; ++e){
@@ -87,6 +84,7 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
                     float dist = sqrt(d_x*d_x+d_y*d_y);
                     dist = max(dist, 0.001);
                     float af = attractive_force(dist);
+					if(v==24) printf("u=%d, att_force= %f\n", u, af);
                     V[v].disp_x -= d_x/dist*af;
                     V[v].disp_y -= d_y/dist*af;
                 }
@@ -102,6 +100,7 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
             V[v].y = min(H/2, max(-H/2,V[v].y));
             V[v].disp_x = 0;
             V[v].disp_y = 0;
+			if(v==24) printf("End1:(%f,%f)\n", V[v].x, V[v].y);
         }
         thr *= 0.99;
     }
@@ -116,21 +115,21 @@ int main(int argc, char* argv[]) {
 	cout<<argv[0]<<endl;
     infile.open(argv[1]);
     //int idx1, idx2, w;
-    int ct = 0;
+    infile >> N >> M;
     Edge e;
-    while(!infile.eof()){
+    for(int i=0; i<2*M; i+=2){
         infile >> e.idx1 >> e.idx2;
-        //cout<<idx1<<' '<<idx2<<endl;
-        E[ct++] = e;
+        //cout<<e.idx1<<' '<<e.idx2<<' '<<ct<<endl;
+        E[i] = e;
         swap(e.idx1, e.idx2);
-        E[ct++] = e;
+        E[i+1] = e;
     }
-    sort(E, E+ct, cmp);
-    cout << "Total Edges = " << ct/2 << endl;
+    sort(E, E+2*M, cmp);
+    //cout << "Total Edges = " << ct/2 << endl;
 	//for(int i=0; i<20; ++i){
 	//	cout<<E[i].idx1<<' '<<E[i].idx2<<endl;
 	//}
-    for(int i=0; i<ct; ++i) {
+    for(int i=0; i<2*M; ++i) {
         Idx[E[i].idx1] += 1;
     }
 	//cout<<"IDX:[";

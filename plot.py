@@ -15,7 +15,7 @@ for line in f.readlines():
     #    break
 f.close()
 f = open(edge_fn, 'r')
-for line in f.readlines():
+for line in f.readlines()[1:]:
     cord = line.split()
     in1 = (int)(cord[0])
     in2 = (int)(cord[1])
