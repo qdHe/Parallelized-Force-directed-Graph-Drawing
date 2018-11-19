@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <chrono>
 #include <stdlib.h>
 #include <math.h>
 using namespace std;
@@ -43,7 +44,7 @@ float min(float a, float b){
     return (a<b)? a:b;
 }
 inline float repulsive_force(float dist){
-    return K*K/dist/N/10000;
+    return K*K/dist/N/100.0;
 }
 
 inline float attractive_force(float dist){
@@ -84,7 +85,7 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
                     float dist = sqrt(d_x*d_x+d_y*d_y);
                     dist = max(dist, 0.001);
                     float af = attractive_force(dist);
-					if(v==24) printf("u=%d, att_force= %f\n", u, af);
+				//	if(v==24) printf("u=%d, att_force= %f\n", u, af);
                     V[v].disp_x -= d_x/dist*af;
                     V[v].disp_y -= d_y/dist*af;
                 }
@@ -100,22 +101,29 @@ void force_directed(Vertex *V, Edge *E, int *Idx, int N, int Iteration, float th
             V[v].y = min(H/2, max(-H/2,V[v].y));
             V[v].disp_x = 0;
             V[v].disp_y = 0;
-			if(v==24) printf("End1:(%f,%f)\n", V[v].x, V[v].y);
+			//if(v==24) printf("End1:(%f,%f)\n", V[v].x, V[v].y);
         }
-        thr *= 0.99;
+        //thr *= 0.99;
     }
 }
 
 int main(int argc, char* argv[]) {
-    Vertex *V = new Vertex[N];
-    Edge *E = new Edge[2*M];
-    int *Idx = new int[N]();
+
+    using namespace std::chrono;
+    typedef std::chrono::high_resolution_clock Clock;
+    typedef std::chrono::duration<double> dsec;
+
 
     ifstream infile;
 	cout<<argv[0]<<endl;
     infile.open(argv[1]);
     //int idx1, idx2, w;
     infile >> N >> M;
+    K = sqrt(1.0*W*H/N);
+    Vertex *V = new Vertex[N];
+    Edge *E = new Edge[2*M];
+    int *Idx = new int[N]();
+
     Edge e;
     for(int i=0; i<2*M; i+=2){
         infile >> e.idx1 >> e.idx2;
@@ -141,7 +149,10 @@ int main(int argc, char* argv[]) {
     //cout << "Complete Initialization" << endl;
     int iteration = atoi(argv[2]);
     int thr = W+H;
+    auto calc_start = Clock::now();
     force_directed(V, E, Idx, N, iteration, thr);
+    double calc_time = duration_cast<dsec>(Clock::now() - calc_start).count();
+    cout << "Time: " << calc_time << endl;
     ofstream outfile("Vertex_Pos.txt");
     for (int v=0; v<N; ++v){
         outfile << V[v].x <<' '<<V[v].y<<endl;
