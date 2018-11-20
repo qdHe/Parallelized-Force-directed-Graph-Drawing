@@ -129,4 +129,18 @@ We plan to use the Latedays cluster to run our code, which will use Tesla K40 GP
 
 > Wrap up the project. Write final report. Prepare video and poster for demo.
 
+# Checkpoint
+## Plan for the show
+- 1: We will show our speedup graphs which compare the performance of different versions of algorithms/different size of input data.
+- 2: We will show the output visualization images of our program and guarantee the quality is similar to sequential version.
+- 3: We may also show how the visualization images evolve with iterations.
 
+## Preliminary Results
+We have some preliminary results at this time. We have implemented a sequential version and a naive parallel version that each thread takes charge of updating one node. We have also run these two versions on different datasets and compares the performance. The following picture shows how the layout is evolved in our force layout algorithm.
+|![image2](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_0.png)|![image3](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_10.png)|![image4](https://github.com/qdHe/15618-final-project/blob/master/images/test_pl_100.png?raw=true)|[image5](https://github.com/qdHe/15618-final-project/blob/master/images/test_pl_1000.png?raw=true)|
+As is shown in the graph below, we have achieved a 300x speedup for WikiVote, a dataset with 8340 vertices and 103722 edges. For small datasets like Test, which we generate ourselves.The speedup is about 10x.
+|![image6](https://github.com/qdHe/15618-final-project/raw/master/images/WikiVote.png)|![image7](https://github.com/qdHe/15618-final-project/raw/master/images/test.png)|
+## Current Concerns
+- 1: One concern for us is how to explore locality and fully utilize the shared memory in each block. Since graph has random access pattern. How to reduce cache misses is a critical issue in further optimization.
+- 2: We also concerned about how to use data structures like quad-trees to trade-off between performance and quality. And how to use CUDA to accelerate this kind of computing.
+- 3: After all these experiments, we found that the dataset itself and the parameters we choose also affect the quality of the layout. So we still need to find some datasets that are suitable for this algorithm.
