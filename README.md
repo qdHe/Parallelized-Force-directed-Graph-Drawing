@@ -137,17 +137,11 @@ We plan to use the Latedays cluster to run our code, which will use Tesla K40 GP
 
 ## Preliminary Results
 We have some preliminary results at this time. We have implemented a sequential version and a naive parallel version that each thread takes charge of updating one node. We have also run these two versions on different datasets and compares the performance. The following picture shows how the layout is evolved in our force layout algorithm.
-|![image2](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_0.png)|![image3](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_10.png)|![image4](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_10.png)|![image5](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_10.png)|
-<figure class="half">
-    <img src="https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_0.png">
-    <img src="https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_10.png">
-</figure>
-<figure class="half">
-    <img src="https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_100.png">
-    <img src="https://github.com/qdHe/15618-final-project/raw/master/images/test_pl_1000.png">
-</figure>
+![image2](https://github.com/qdHe/15618-final-project/raw/master/images/test_pl.png)
+![image3](https://github.com/qdHe/15618-final-project/raw/master/images/phy_pl.png)
 As is shown in the graph below, we have achieved a 300x speedup for WikiVote, a dataset with 8340 vertices and 103722 edges. For small datasets like Test, which we generate ourselves.The speedup is about 10x.
-|![image6](https://github.com/qdHe/15618-final-project/raw/master/images/WikiVote.png)|![image7](https://github.com/qdHe/15618-final-project/raw/master/images/test.png)|
+![image4](https://github.com/qdHe/15618-final-project/raw/master/images/WikiVote.png)
+![image5](https://github.com/qdHe/15618-final-project/raw/master/images/test.png)
 
 ## Current Concerns
 - 1: One concern for us is how to explore locality and fully utilize the shared memory in each block. Since graph has random access pattern. How to reduce cache misses is a critical issue in further optimization.
