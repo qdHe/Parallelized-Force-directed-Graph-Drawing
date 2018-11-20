@@ -130,6 +130,49 @@ We plan to use the Latedays cluster to run our code, which will use Tesla K40 GP
 > Wrap up the project. Write final report. Prepare video and poster for demo.
 
 # Checkpoint
+
+## New schedule
+* **11.20--11.25**
+
+> Learn the algorithm Barnes-Hut, k-d tree (Di Jin) and quad-tree (Qidu He), and decide which one to use in the project (Both).
+
+* **11.26--11.30**
+
+> Start implementing the selected algorithm (Qidu He).
+> Implement display part using OpenGL (Di Jin).
+
+* **12.1--12.5**
+
+> Complete implementing the selected algorithm (Qidu He).
+> Parallel display part (Di Jin).
+
+* **12.6-12.10**
+
+> Write the parallel CPU version using OpenMP and compare performance (Qidu He).
+> Explore some other optimization methods such as graph compressing.
+
+* **12.11-12.16**
+
+> Wrap up the project. Write final report. Prepare video and poster for demo.
+
+
+## Completed work
+-1: We wrote the sequential version of force-directed algorithm and test the performance.
+-2: We wrote the first parallel version with CUDA - one vertex per thread, global synchronization. 
+
+## Goals and Deiverables
+### Plan to achieve
+- 1: ~~Write the CUDA parallelized version of force-directed algorithm and run on GPU.~~
+    *Have completed the naive version*
+- 2: The complexity of the original algorithm is O(mn^2) for m iterations, we will reduce the total complexity and do some speed-quality tradeoff.
+    *Still believe able to achieve - The total runtime is closely related to the number of iterations, which depends on the real dataset. Since we focus on the performance of program, we will fixed the number of iterations. To reduce the total complexity, we will use some approximation algorithm to ignore far nodes or combine multiple nodes into one virtual node. Candidate algorithm: Barnes-Hut, k-d tree or quad-tree.*
+
+### Hope to achieve
+- 1: ~~Process massive data in real time.~~ Display the image with OpenGL, and parallel the display program
+    *For convenience, we use Python to display the final result of force-directed algorithm, which takes a lot of time. We realize that simply speeding up the process of calculation is not enough. We plan to implement the visualization with OpenGL and also try to accelerate it.*
+- 2: Write the parallelized CPU version of force-directed algorithm with OpenMP and run on Xeon Phi. Compare the performance of parallel GPU version and CPU version.
+    *Still possible to achieve, but has lower priority than display*
+
 ## Plan for the show
 - 1: We will show our speedup graphs which compare the performance of different versions of algorithms/different size of input data.
 - 2: We will show the output visualization images of our program and guarantee the quality is similar to sequential version.
