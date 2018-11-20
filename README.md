@@ -139,29 +139,26 @@ We plan to use the Latedays cluster to run our code, which will use Tesla K40 GP
 * **11.26--11.30**
 
 > Start implementing the selected algorithm (Qidu He).
->
 > Implement display part using OpenGL (Di Jin).
 
 * **12.1--12.5**
 
 > Complete implementing the selected algorithm (Qidu He).
->
 > Parallel display part (Di Jin).
 
 * **12.6-12.10**
 
 > Write the parallel CPU version using OpenMP and compare performance (Qidu He).
->
-> Explore some other optimization methods such as graph compressing.
+> Explore some other optimization methods such as graph compressing (Di Jin).
 
 * **12.11-12.16**
 
-> Wrap up the project. Write final report. Prepare video and poster for demo.
+> Wrap up the project. Write final report. (Both) 
+> Prepare video and poster for demo. (Both)
 
 
 ## Completed work
 - 1: We wrote the sequential version of force-directed algorithm and test the performance.
-
 - 2: We wrote the first parallel version with CUDA - one vertex per thread, global synchronization. 
 
 ## Goals and Deiverables
