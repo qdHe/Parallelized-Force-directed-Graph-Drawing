@@ -11,7 +11,6 @@ for each timestep do {
 7. Transfer result to CPU and output
 */
 #define TOTAL_V_NUM 10000
-#define TOTAL_NODE_NUM 160000
 #define CELL_NUM 4
 #define LOCK -2
 #define NOTHING -1
