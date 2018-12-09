@@ -12,7 +12,7 @@ for each timestep do {
 */
 #include <iostream>
 #include <fstream>
-//#include <chrono>
+#include <chrono>
 #include <algorithm>
 #include <stdlib.h>
 #include <math.h>
@@ -26,7 +26,7 @@ for each timestep do {
 #include <thrust/sort.h>
 #include <thrust/reduce.h>
 #include <thrust/extrema.h>
-
+using namespace std;
 
 #define TOTAL_V_NUM 10000
 #define CELL_NUM 4
@@ -35,11 +35,9 @@ for each timestep do {
 #define MAXDEPTH 10
 #define THREADS5 16
 #define WARPSIZE 32
+#define BLOCK_SIZE 256
 #define W 10
 #define H 10
-int N = 8;//tentative
-int M = 8;
-float K = sqrt(1.0*W*H/N);
 
 
 #ifdef DEBUG
@@ -56,6 +54,21 @@ struct GlobalConstants{
     float Eps;
     float Thr;
 };
+
+class Edge{
+public:
+    int idx1;
+    int idx2;
+
+    Edge():idx1(-1), idx2(-1){}
+    Edge(int a, int b):idx1(a), idx2(b){}
+};
+
+bool cmp(Edge a, Edge b) {
+    if (a.idx1<b.idx1) return true;
+    else if (a.idx1 == b.idx1 && a.idx2 < b.idx2) return true;
+    return false;
+}
 
 float find_min(float* nums, int N){
     thrust::device_ptr<float> ptr(nums);
@@ -228,11 +241,11 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
     float sum_y;
     int threadId = blockIdx.x*blockDim.x + threadIdx.x;
     int node_id = threadId + *_bottom;
-    if(threadId == 0){
+    /*if(threadId == 0){
         for(int i=0; i<N; i++){
             printf("count %d:%d\n", i, count[i]);
         }
-    }
+    }*/
 
     while(node_id<=node_num){
 
@@ -324,18 +337,18 @@ __global__ void SortKernel(int* startd, int *sort, int *child, int *count,
         if (start >= 0) {
             for (int i = 0; i < 4; ++i) {
                 int childIdx = child[cell*4+i];
-                if(childIdx == 15){
+                /*if(childIdx == 15){
                     printf("child[15], count = %d\n", count[15]);
-                }
+                }*/
                 if (childIdx >= N) {
-                    printf("   #case1: start = %d, i = %d, childIdx = %d\n",
-                           start, i, childIdx);
+                    //printf("   #case1: start = %d, i = %d, childIdx = %d\n",
+                     //      start, i, childIdx);
                     // child is a cell
                     startd[childIdx] = start;  // set start ID of child
                     start += count[childIdx];  // add #bodies in subtree
                 } else if (childIdx >= 0) {
-                    printf("   #case2: start = %d, i = %d, childIdx = %d\n",
-                           start, i, childIdx);
+                    //printf("   #case2: start = %d, i = %d, childIdx = %d\n",
+                    //      start, i, childIdx);
                     // child is a body
                     sort[start] = childIdx;  // record body in 'sorted' array
                     ++start;
@@ -485,9 +498,13 @@ void UpdatePosKernel(float* posx, float* posy, float *dispX, float *dispY){
     }
 }
 
-void BH(float* hostx, float* hosty, int *E, int *Idx, int N, int timesteps){
-    int gridDim = 32;
-    int blockDim = 32;
+void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, int timesteps){
+    using namespace std::chrono;
+    typedef std::chrono::high_resolution_clock Clock;
+    typedef std::chrono::duration<double> dsec;
+
+    dim3 blockDim(BLOCK_SIZE);
+    dim3 gridDim((N*2+BLOCK_SIZE-1)/BLOCK_SIZE);
     float alpha = 4;
     float eps = 0.0025;
     float thr = W+H;
@@ -544,6 +561,7 @@ void BH(float* hostx, float* hosty, int *E, int *Idx, int N, int timesteps){
     cudaMemcpyToSymbol(deviceParams, &params, sizeof(GlobalConstants));
 
     //FORCE DIRECTED
+    auto calc_start = Clock::now();
     for (iter = 0; iter < timesteps; iter++) {
         //Calculating repulsive force
         //Calculating bounding box
@@ -575,19 +593,21 @@ void BH(float* hostx, float* hosty, int *E, int *Idx, int N, int timesteps){
         //Sort
         cudaMemset(start,0,sizeof(int)*(node_num+1));
         batch_set(start+N, N, -1);
+        /*
         cudaMemcpy(debug_start, start, sizeof(float)*(node_num+1), cudaMemcpyDeviceToHost);
         for(int i = 0; i<=node_num; ++i){
-            printf("%d ", debug_start[i]);
+            //printf("%d ", debug_start[i]);
         }
-        printf("\nPOS1\n");
+        printf("\nPOS1\n");*/
         //printf("node_num: %d, bottom: %d\n", node_num, (*_bottom));
         SortKernel<<<gridDim, blockDim>>>(start, sort, child, count, _bottom, node_num);
         cudaDeviceSynchronize();
+        /*
         cudaMemcpy(debug_sort, sort, sizeof(float)*N, cudaMemcpyDeviceToHost);
         for(int i = 0; i<N; ++i){
             printf("%d ", debug_sort[i]);
         }
-        printf("\nPOS2\n");
+        printf("\nPOS2\n");*/
         //Compute force //TODO try separate repulsive force and attractive force calculation
         ForceCalculationKernel<<<gridDim, blockDim>>>(posx, posy, child, count, sort, deviceEdge, deviceIdx,
                 dispx, dispy, node_num, _maxDepth, radius);
@@ -598,25 +618,56 @@ void BH(float* hostx, float* hosty, int *E, int *Idx, int N, int timesteps){
         cudaDeviceSynchronize();
 
     }
+    double calc_time = duration_cast<dsec>(Clock::now() - calc_start).count();
+
+    cout << "Time: " << calc_time << endl;
+    cudaMemcpy(hostx, posx, sizeof(float)*N, cudaMemcpyDeviceToHost);
+    cudaMemcpy(hosty, posy, sizeof(float)*N, cudaMemcpyDeviceToHost);
 }
 
 
-int main(){
-    int N = 256;
+int main(int argc, char* argv[]){
+    int N, M;
+
+
+    ifstream infile;
+    infile.open(argv[1]);
+    infile >> N >> M;
+    float K = sqrt(1.0*W*H/N);
+    Edge *E = new Edge[2*M];
+    int *Idx = new int[N]();
     float *hostx = new float[N];
     float *hosty = new float[N];
-    int *E = new int[4*M];
-    int *Idx = new int[N]();
-    for(int i=0; i<N; ++i){
-        Idx[i] = 4*(i+1);
-        E[4*i] = i;
-        E[4*i] = (i+1)%N;
-        E[4*i] = i;
-        E[4*i] = (i-1+N)%N;
+
+    Edge e;
+    for(int i=0; i<2*M; i+=2){
+        infile >> e.idx1 >> e.idx2;
+        //cout<<e.idx1<<' '<<e.idx2<<endl;
+        E[i] = e;
+        swap(e.idx1, e.idx2);
+        E[i+1] = e;
     }
-    for(int i=0; i<256; i++){
-        hostx[i] = (i%16)*0.1f;//(float(rand())/RAND_MAX-0.5f);
-        hosty[i] = (i/16)*0.1f;//(float(rand())/RAND_MAX-0.5f);
+    sort(E, E+2*M, cmp);
+    cout << "Total Edges = " << M << endl;
+
+    for(int i=0; i<2*M; ++i) {
+        Idx[E[i].idx1] += 1;
     }
-    BH(hostx, hosty, E, Idx, N, 1);
-}
+
+    for(int i=1; i<N; ++i) {
+        Idx[i] += Idx[i-1]; //End Index
+    }
+    //cout<<"]"<<endl;
+    cout << "Complete Initialization" << endl;
+    int iteration = atoi(argv[2]);
+    for(int i=0; i<N; i++){
+        hostx[i] = (float(rand())/RAND_MAX-0.5f);
+        hosty[i] = (float(rand())/RAND_MAX-0.5f);
+    }
+    BH(hostx, hosty, E, Idx, N, M, K, iteration);
+    ofstream outfile("Vertex_Pos_pl.txt");
+    for (int v=0; v<N; ++v){
+        outfile << hostx[v] <<' '<<hosty[v]<<endl;
+    }
+    outfile.close();
+};
