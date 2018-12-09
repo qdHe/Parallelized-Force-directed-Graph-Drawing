@@ -179,7 +179,7 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
 
 }
 
-__global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* count, int* _bottom, int node_num){
+__global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* count, int* _bottom, int node_num, int N){
     
     int missing = 0;
     int child_node;
@@ -194,6 +194,11 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
     float sum_y;
     int threadId = blockIdx.x*blockDim.x + threadIdx.x;
     int node_id = threadId + *_bottom;
+    if(threadId == 0){
+        for(int i=0; i<N; i++){
+            printf("count %d:%d\n", i, count[i]);
+        }
+    }
 
     while(node_id<node_num){
         
@@ -205,7 +210,7 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
             cache_tail = 0;
             for(int i=CELL_NUM*node_id; i<CELL_NUM*node_id+CELL_NUM; i++){
                 int child_node = child[i];
-                if(child_node > 0){
+                if(child_node >= 0){
                     if(count[child_node] > 0){
                         sum_x += posx[child_node];
                         sum_y += posy[child_node];
@@ -241,7 +246,7 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
             //FENCE
             __threadfence();
             count[node_id] = tmp_count;
-            printf("%d after: x %f y %f count\n", node_id, posx[node_id], posy[node_id], count[node_id]);
+            printf("%d after: x %f y %f count %d\n", node_id, posx[node_id], posy[node_id], count[node_id]);
             node_id += step;
         }
     }
@@ -326,7 +331,7 @@ void BH(float* hostx, float* hosty, int N, int timesteps){
         //Summerize Tree
         batch_set(count+N, node_num-N, -1);
         batch_set(count, N, 1);
-        SummarizeTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, count, _bottom, node_num);
+        SummarizeTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, count, _bottom, node_num, N);
         cudaDeviceSynchronize();
 
         //===debug====//
