@@ -348,14 +348,14 @@ __global__ void SortKernel(int* startd, int *sort, int *child, int *count,
                     printf("child[15], count = %d\n", count[15]);
                 }*/
                 if (childIdx >= N) {
-                    printf("   #case1: start = %d, i = %d, childIdx = %d\n",
-                           start, i, childIdx);
+                    //printf("   #case1: start = %d, i = %d, childIdx = %d\n",
+                    //       start, i, childIdx);
                     // child is a cell
                     startd[childIdx] = start;  // set start ID of child
                     start += count[childIdx];  // add #bodies in subtree
                 } else if (childIdx >= 0) {
-                    printf("   #case2: start = %d, i = %d, childIdx = %d\n",
-                          start, i, childIdx);
+                    //printf("   #case2: start = %d, i = %d, childIdx = %d\n",
+                    //      start, i, childIdx);
                     // child is a body
                     sort[start] = childIdx;  // record body in 'sorted' array
                     ++start;
@@ -373,7 +373,7 @@ __global__ void SortKernel(int* startd, int *sort, int *child, int *count,
 /******************************************************************************/
 
 __device__ __inline__ float repulsive_force(float dist){
-    return deviceParams.K*deviceParams.K/dist/deviceParams.N/10000;
+    return deviceParams.K*deviceParams.K/dist/deviceParams.N/100.;
 }
 
 __device__ __inline__ float attractive_force(float dist){
@@ -384,8 +384,8 @@ __global__
 void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, int *sort, int *E, int *Idx,
                             float *dispX, float *dispY, int node_num, int *_maxdepth, float radius)
 {
-    __shared__ volatile int pos[MAXDEPTH * THREADS5/WARPSIZE], node[MAXDEPTH * THREADS5/WARPSIZE];
-    __shared__ float dq[MAXDEPTH * THREADS5/WARPSIZE];
+    __shared__ volatile int pos[MAXDEPTH * BLOCK_SIZE/WARPSIZE], node[MAXDEPTH * BLOCK_SIZE/WARPSIZE];
+    __shared__ float dq[MAXDEPTH * BLOCK_SIZE/WARPSIZE];
     float alpha = deviceParams.Alpha, eps = deviceParams.Eps;
     int maxdepth = *_maxdepth;
 
@@ -439,33 +439,42 @@ void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, in
                 while ((t = pos[depth]) < 4) {
                     // node on top of stack has more children to process
                     int childIdx = child[node[depth]*4+t];  // load child pointer
+					//if (v==2) printf("=== Depth %d, t %d, childIdx %d ===\n", depth, t, childIdx);
                     if (sbase == threadIdx.x) {
                         // I'm the first thread in the warp
                         pos[depth] = t + 1;
                     }
                     if (childIdx >= 0) {
-                        float dx = posx[childIdx] - px;
-                        float dy = posy[childIdx] - py;
-                        float dist = dx*dx + dy*dy + eps;  // compute distance squared (plus softening)
-                        if ((childIdx < deviceParams.N) || __all(dist >= dq[depth])) {  // check if all threads agree that cell is far enough away (or is a body)
-                            dist = rsqrtf(dist);  // compute distance
-                            float rf = repulsive_force(dist)*count[childIdx];
-                            dispx += dx/dist*rf;//disp_x
-                            dispy += dy/dist*rf;//disp_y
-                        } else {
+                        float dx = px - posx[childIdx];
+                        float dy = py - posy[childIdx];
+                        float dist = dx*dx + dy*dy;  // compute distance squared (plus softening)
+                        if ((childIdx < deviceParams.N) /*|| __all(dist >= dq[depth])*/) {  // check if all threads agree that cell is far enough away (or is a body)
+							if (childIdx != v){ 	
+								dist = sqrt(dist);  // compute distance
+								dist = max(dist, 0.001);
+								float rf = repulsive_force(dist)*count[childIdx];
+								dispx += dx/dist*rf;//disp_x
+								dispy += dy/dist*rf;//disp_y
+								if (v==2) printf("#case1: point %d with cell %d,dist: %f, repulsive force:%f\n", v,	childIdx, dist, rf);
+							}
+						} else {
                             // push cell onto stack
                             depth++;
                             if (sbase == threadIdx.x) {
-                                node[depth] = childIdx;
+                              //  printf("add cell %d on the stack\n", childIdx);
+								node[depth] = childIdx;
                                 pos[depth] = 0;
                             }
+							//if (v==2) printf("#case2: point %d with cell%d, depth:%d\n", v, childIdx, depth);
                         }
-                    } else {
-                        depth = max(j, depth - 1);  // early out because all remaining children are also zero
-                    }
+                    } //else {
+                      //  depth = max(j, depth - 1);  // early out because all remaining children are also zero
+                    //}
                 }
                 depth--;  // done with this level
             }
+			if(v==2) 
+			  printf("AFTER RF:dispx:%f, dispy:%f\n",dispx,dispy);
 
             int start = 0;
             if (v > 0){
@@ -475,16 +484,21 @@ void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, in
                 int u = E[e+1];
                 float dx = px-posx[u];
                 float dy = py-posy[u];
-                float dist = sqrt(dx*dx+dy*dy+eps);
+                float dist = sqrt(dx*dx+dy*dy);
+				dist = max(dist, 0.001);
                 float af = attractive_force(dist);
+				//printf("point %d edge=(%d, %d), force=%f\n", v, v, u, af);
                 //if(v==10) printf("u=%d, att_force= %f\n", u, af);
                 dispx -= dx/dist*af;
                 dispy -= dy/dist*af;
             }
+			if(v==2) 
+			  printf("AFTER RF:dispx:%f, dispy:%f\n",dispx,dispy);
+
 
             dispX[v] = dispx;
             dispY[v] = dispy;
-            printf("point %d disx %f disy %f\n", v, dispx, dispy);
+            //printf("point %d disx %f disy %f\n", v, dispx, dispy);
         }
     }
 }
@@ -503,7 +517,7 @@ void UpdatePosKernel(float* posx, float* posy, float *dispX, float *dispY){
         py += (dist > thr) ? dispy / dist * thr : dispy;
         posx[v] = min(W / 2., max(-W / 2., px));
         posy[v] = min(H / 2., max(-H / 2., py));
-        printf("point %d x %f y %f\n", v, posx[v], posy[v]);
+        //printf("point %d x %f y %f\n", v, posx[v], posy[v]);
     }
 }
 
@@ -575,8 +589,8 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         //Calculating repulsive force
         //Calculating bounding box
         printf("iter %d N %d\n", iter, N);
-        printArray<<<1, 1>>>(posx, N);
-        printArray<<<1, 1>>>(posy, N);
+		//printArray<<<1, 1>>>(posx, N);
+        //printArray<<<1, 1>>>(posy, N);
         cudaDeviceSynchronize();
         minx = find_min(posx, N);
         maxx = find_max(posx, N);
@@ -586,7 +600,7 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         radius *= 0.5;
         rootx = (minx+maxx)*0.5;
         rooty = (miny+maxy)*0.5;
-        printf("rootx %f rooty %f radius %f\n", rootx, rooty, radius);
+        //printf("rootx %f rooty %f radius %f\n", rootx, rooty, radius);
         cudaMemset(_bottom, node_num, 1);
         cudaMemset(_maxDepth, 0, 1);
         //Build Tree
@@ -595,7 +609,7 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         batch_set(child, CELL_NUM*(node_num+1), -1);
         BuildTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, _bottom, _maxDepth, radius, N, node_num, rootx, rooty);
         cudaDeviceSynchronize();
-        printTree<<<1, 1>>>(posx, posy, child, node_num, N);
+        //printTree<<<1, 1>>>(posx, posy, child, node_num, N);
         printf("build tree success!\n");
 
         //Summerize Tree
@@ -603,7 +617,7 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         batch_set(count, N, 1);
         SummarizeTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, count, _bottom, node_num, N);
         cudaDeviceSynchronize();
-        printTree<<<1, 1>>>(posx, posy, child, node_num, N);
+        //printTree<<<1, 1>>>(posx, posy, child, node_num, N);
 
         //Sort
         batch_set(start,(node_num+1),0);
@@ -617,27 +631,27 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         //printf("node_num: %d, bottom: %d\n", node_num, (*_bottom));
         SortKernel<<<gridDim, blockDim>>>(start, sort, child, count, _bottom, node_num);
         cudaDeviceSynchronize();
-        /*
-        cudaMemcpy(debug_sort, sort, sizeof(float)*N, cudaMemcpyDeviceToHost);
+        
+        /*cudaMemcpy(debug_sort, sort, sizeof(float)*N, cudaMemcpyDeviceToHost);
         for(int i = 0; i<N; ++i){
             printf("%d ", debug_sort[i]);
         }
-        printf("\nPOS2\n");*/
+        printf("\n");*/
         //Compute force //TODO try separate repulsive force and attractive force calculation
         ForceCalculationKernel<<<gridDim, blockDim>>>(posx, posy, child, count, sort, deviceEdge, deviceIdx,
                 dispx, dispy, node_num, _maxDepth, radius);
         cudaDeviceSynchronize();
-        printf("compute force\n");
-        printArray<<<1, 1>>>(posx, N);
-        printArray<<<1, 1>>>(posy, N);
-        cudaDeviceSynchronize();
-        thr *= 0.99; //TODO
+        //printf("compute force\n");
+        //printArray<<<1, 1>>>(posx, N);
+        //printArray<<<1, 1>>>(posy, N);
+        //cudaDeviceSynchronize();
+        //thr *= 0.99; //TODO
         //Update
         UpdatePosKernel<<<gridDim, blockDim>>>(posx, posy, dispx, dispy);
         cudaDeviceSynchronize();
-        printArray<<<1, 1>>>(posx, N);
-        printArray<<<1, 1>>>(posy, N);
-        cudaDeviceSynchronize();
+        //printArray<<<1, 1>>>(posx, N);
+        //printArray<<<1, 1>>>(posy, N);
+        //cudaDeviceSynchronize();
 
     }
     double calc_time = duration_cast<dsec>(Clock::now() - calc_start).count();
@@ -673,7 +687,7 @@ int main(int argc, char* argv[]){
     cout << "Total Edges = " << M << endl;
 
     for(int i=0; i<2*M; ++i) {
-        Idx[E[i].idx1] += 1;
+        Idx[E[i].idx1] += 2;
     }
 
     for(int i=1; i<N; ++i) {
