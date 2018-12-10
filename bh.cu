@@ -96,6 +96,13 @@ __global__ void init(int* _bottom, int* maxDepth, int node_num){
     *maxDepth = 0;
 }
 
+__global__ void printArray(float* array, int N){
+    for(int i=0; i<N; i++){
+        printf("%f ",array[i]);
+    }
+    printf("\n");
+}
+
 __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bottom, int* _maxDepth, float radius, int N, int node_num,
                                 float rootx, float rooty){
     int threadId = blockIdx.x*blockDim.x + threadIdx.x;
@@ -163,7 +170,7 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
                 if (curIndex == NOTHING) {
                     child[locked] = i; // insert body and release lock
                     local_max_depth = max(local_depth, local_max_depth);
-                    //printf("empty, add %d to %d path %d success\n", i, lastIndex, path);
+                    printf("empty, add %d to %d path %d success\n", i, lastIndex, path);
                 } else {
                     int old_node = curIndex;
                     float old_node_x = posx[old_node];
@@ -203,8 +210,8 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
                         if(path != old_node_path){
                             child[cell*CELL_NUM+path] = i;
                             child[cell*CELL_NUM+old_node_path] = old_node;
-                            //printf("new cell %d x:%f y:%f rad:%f old id %d path %d new id %d path %d break\n",
-                            //       cell, posx[cell], posy[cell], curRad, old_node, old_node_path, i, path);
+                            printf("new cell %d x:%f y:%f rad:%f old id %d path %d new id %d path %d break\n",
+                                   cell, posx[cell], posy[cell], curRad, old_node, old_node_path, i, path);
                             break;
                         }else{
                             lastIndex = cell;
@@ -294,13 +301,13 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
             //FENCE
             __threadfence();
             count[node_id] = tmp_count;
-            //printf("%d after: x %f y %f count %d\n", node_id, posx[node_id], posy[node_id], count[node_id]);
+            printf("%d after: x %f y %f count %d\n", node_id, posx[node_id], posy[node_id], count[node_id]);
             node_id += step;
         }
     }
 }
 
-void printTree(float* posx, float* posy, int* child, int node_num, int N){
+__global__ void printTree(float* posx, float* posy, int* child, int node_num, int N){
     bool flag;
     for(int i=node_num; i>=N; i--){
         flag = false;
@@ -341,14 +348,14 @@ __global__ void SortKernel(int* startd, int *sort, int *child, int *count,
                     printf("child[15], count = %d\n", count[15]);
                 }*/
                 if (childIdx >= N) {
-                    //printf("   #case1: start = %d, i = %d, childIdx = %d\n",
-                     //      start, i, childIdx);
+                    printf("   #case1: start = %d, i = %d, childIdx = %d\n",
+                           start, i, childIdx);
                     // child is a cell
                     startd[childIdx] = start;  // set start ID of child
                     start += count[childIdx];  // add #bodies in subtree
                 } else if (childIdx >= 0) {
-                    //printf("   #case2: start = %d, i = %d, childIdx = %d\n",
-                    //      start, i, childIdx);
+                    printf("   #case2: start = %d, i = %d, childIdx = %d\n",
+                          start, i, childIdx);
                     // child is a body
                     sort[start] = childIdx;  // record body in 'sorted' array
                     ++start;
@@ -477,6 +484,7 @@ void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, in
 
             dispX[v] = dispx;
             dispY[v] = dispy;
+            printf("point %d disx %f disy %f\n", v, dispx, dispy);
         }
     }
 }
@@ -495,6 +503,7 @@ void UpdatePosKernel(float* posx, float* posy, float *dispX, float *dispY){
         py += (dist > thr) ? dispy / dist * thr : dispy;
         posx[v] = min(W / 2., max(-W / 2., px));
         posy[v] = min(H / 2., max(-H / 2., py));
+        printf("point %d x %f y %f\n", v, posx[v], posy[v]);
     }
 }
 
@@ -504,7 +513,7 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
     typedef std::chrono::duration<double> dsec;
 
     dim3 blockDim(BLOCK_SIZE);
-    dim3 gridDim((N*2+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 gridDim((N*2+1+BLOCK_SIZE-1)/BLOCK_SIZE);
     float alpha = 4;
     float eps = 0.0025;
     float thr = W+H;
@@ -565,7 +574,10 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
     for (iter = 0; iter < timesteps; iter++) {
         //Calculating repulsive force
         //Calculating bounding box
-        printf("iter %d\n", iter);
+        printf("iter %d N %d\n", iter, N);
+        printArray<<<1, 1>>>(posx, N);
+        printArray<<<1, 1>>>(posy, N);
+        cudaDeviceSynchronize();
         minx = find_min(posx, N);
         maxx = find_max(posx, N);
         miny = find_min(posy, N);
@@ -579,9 +591,11 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         cudaMemset(_maxDepth, 0, 1);
         //Build Tree
         init<<<1, 1>>>(_bottom, _maxDepth, node_num);
+        cudaDeviceSynchronize();
         batch_set(child, CELL_NUM*(node_num+1), -1);
         BuildTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, _bottom, _maxDepth, radius, N, node_num, rootx, rooty);
         cudaDeviceSynchronize();
+        printTree<<<1, 1>>>(posx, posy, child, node_num, N);
         printf("build tree success!\n");
 
         //Summerize Tree
@@ -589,9 +603,10 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         batch_set(count, N, 1);
         SummarizeTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, count, _bottom, node_num, N);
         cudaDeviceSynchronize();
+        printTree<<<1, 1>>>(posx, posy, child, node_num, N);
 
         //Sort
-        cudaMemset(start,0,sizeof(int)*(node_num+1));
+        batch_set(start,(node_num+1),0);
         batch_set(start+N, N, -1);
         /*
         cudaMemcpy(debug_start, start, sizeof(float)*(node_num+1), cudaMemcpyDeviceToHost);
@@ -612,9 +627,16 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         ForceCalculationKernel<<<gridDim, blockDim>>>(posx, posy, child, count, sort, deviceEdge, deviceIdx,
                 dispx, dispy, node_num, _maxDepth, radius);
         cudaDeviceSynchronize();
+        printf("compute force\n");
+        printArray<<<1, 1>>>(posx, N);
+        printArray<<<1, 1>>>(posy, N);
+        cudaDeviceSynchronize();
         thr *= 0.99; //TODO
         //Update
         UpdatePosKernel<<<gridDim, blockDim>>>(posx, posy, dispx, dispy);
+        cudaDeviceSynchronize();
+        printArray<<<1, 1>>>(posx, N);
+        printArray<<<1, 1>>>(posy, N);
         cudaDeviceSynchronize();
 
     }
