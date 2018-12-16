@@ -1,15 +1,3 @@
-/*
-0. Read input data and transfer to GPU
-for each timestep do {
-1. Compute bounding box around all bodies
-2. Build hierarchical decomposition by inserting each body into octree
-3. Summarize body information in each internal octree node
-4. Approximately sort the bodies by spatial distance
-5. Compute forces acting on each body with help of octree
-6. Update body positions and velocities
-}
-7. Transfer result to CPU and output
-*/
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -32,7 +20,7 @@ using namespace std;
 #define CELL_NUM 4
 #define LOCK -2
 #define NOTHING -1
-#define MAXDEPTH 10
+#define MAXDEPTH 30
 #define THREADS5 16
 #define WARPSIZE 32
 #define BLOCK_SIZE 256
@@ -40,11 +28,6 @@ using namespace std;
 #define H 10
 
 
-#ifdef DEBUG
-#define DEBUG_PRINT(fmt, args...)    printf(fmt, ## args)
-#else
-# define DEBUG_PRINT(fmt, args...) do {} while (false)
-#endif
 
 struct GlobalConstants{
     int N;
@@ -74,7 +57,6 @@ float find_min(float* nums, int N){
     thrust::device_ptr<float> ptr(nums);
     int result_offset = thrust::min_element(ptr, ptr + N) - ptr;
     float min_x = *(ptr + result_offset);
-    printf("min: %f\n", min_x);
     return min_x;
 }
 
@@ -96,13 +78,10 @@ __global__ void init(int* _bottom, int* maxDepth, int node_num){
     *maxDepth = 0;
 }
 
-__global__ void printArray(float* array, int N){
-    for(int i=0; i<N; i++){
-        printf("%f ",array[i]);
-    }
-    printf("\n");
-}
 
+/******************************************************************************/
+/*** build tree ***************************************************************/
+/******************************************************************************/
 __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bottom, int* _maxDepth, float radius, int N, int node_num,
                                 float rootx, float rooty){
     int threadId = blockIdx.x*blockDim.x + threadIdx.x;
@@ -125,12 +104,9 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
     if(threadId == 0){
         posx[rootIndex] = rootx;
         posy[rootIndex] = rooty;
-        printf("bottom %d\n",*_bottom);
     }
 
     while(i < N){
-        // initialize
-
         if(newBody){
             x = posx[i];
             y = posy[i];
@@ -146,9 +122,9 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
             curRad = radius;
 
             local_depth = 1;
-            //printf("new body %d x %f y %f\n", i, x, y);
         }
-        curIndex = child[CELL_NUM*lastIndex+path];//TODO
+        curIndex = child[CELL_NUM*lastIndex+path];
+        // follow a path to leave node
         while(curIndex >= N){
             lastIndex = curIndex;
             path = 0;
@@ -165,19 +141,18 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
 
         if (curIndex != LOCK) {
             locked = CELL_NUM*lastIndex+path;
+            // try locking the node
             if (curIndex == atomicCAS((int*)&child[locked], curIndex, LOCK)) {
-                //printf("add to tree node %d posx %f posy %f\n", lastIndex, posx[lastIndex], posy[lastIndex]);
                 if (curIndex == NOTHING) {
                     child[locked] = i; // insert body and release lock
                     local_max_depth = max(local_depth, local_max_depth);
-                    //printf("empty, add %d to %d path %d success\n", i, lastIndex, path);
                 } else {
+                    // malloc new cell nodes
                     int old_node = curIndex;
                     float old_node_x = posx[old_node];
                     float old_node_y = posy[old_node];
                     int cell = atomicSub((int*)_bottom, 1) - 1;
                     int new_cell = cell;
-                    //printf("old node %d x:%f y:%f new cell:%d\n", old_node, old_node_x, old_node_y, cell);
                     do{
                         if(cell<N){
                             printf("error break\n");
@@ -205,13 +180,9 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
                         if(posy[cell] < old_node_y){
                             old_node_path += 2;
                         }
-                        //printf("new cell %d x:%f y:%f rad:%f old id %d path %d new id %d path %d\n",
-                        //        cell, posx[cell], posy[cell], curRad, old_node, old_node_path, i, path);
                         if(path != old_node_path){
                             child[cell*CELL_NUM+path] = i;
                             child[cell*CELL_NUM+old_node_path] = old_node;
-                            //printf("new cell %d x:%f y:%f rad:%f old id %d path %d new id %d path %d break\n",
-                                   //cell, posx[cell], posy[cell], curRad, old_node, old_node_path, i, path);
                             break;
                         }else{
                             lastIndex = cell;
@@ -226,13 +197,16 @@ __global__ void BuildTreeKernel(float* posx, float* posy, int* child, int* _bott
                 local_max_depth = max(local_depth, local_max_depth);
             }
         }
-        //__syncthreads();
     }
+    // gather maximum depth
     atomicMax((int *)_maxDepth, local_max_depth);
 
 
 }
 
+/******************************************************************************/
+/*** summarize nodes **********************************************************/
+/******************************************************************************/
 __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* count, int* _bottom, int node_num, int N){
 
     int missing = 0;
@@ -248,11 +222,6 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
     float sum_y;
     int threadId = blockIdx.x*blockDim.x + threadIdx.x;
     int node_id = threadId + *_bottom;
-    /*if(threadId == 0){
-        for(int i=0; i<N; i++){
-            printf("count %d:%d\n", i, count[i]);
-        }
-    }*/
 
     while(node_id<=node_num){
 
@@ -271,8 +240,8 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
                         sum_y += posy[child_node]*tmp_c;
                         tmp_count += tmp_c;
                     }else{
+                        // add node to stack
                         missing++;
-                        //TODO cache index
                         cache[cache_tail++] = child_node;
                     }
                     child_num++;
@@ -294,35 +263,15 @@ __global__ void SummarizeTreeKernel(float* posx, float* posy, int* child, int* c
                 }
             }while(missing != 0 && tmp_c > 0);
         }
+        // all children are ready, update current node
         if(missing == 0){
-            //printf("%d before: x %f y %f\n", node_id, posx[node_id], posy[node_id]);
             posx[node_id] = sum_x/tmp_count;
             posy[node_id] = sum_y/tmp_count;
             //FENCE
             __threadfence();
             count[node_id] = tmp_count;
-            //printf("%d after: x %f y %f count %d\n", node_id, posx[node_id], posy[node_id], count[node_id]);
             node_id += step;
         }
-    }
-}
-
-__global__ void printTree(float* posx, float* posy, int* child, int node_num, int N){
-    bool flag;
-    for(int i=node_num; i>=N; i--){
-        flag = false;
-        printf("node %d posx %f posy %f \n", i, posx[i], posy[i]);
-        for(int j=i*CELL_NUM; j<i*CELL_NUM+CELL_NUM; j++){
-
-            printf(" child:%d", child[j]);
-            if(child[j] > 0) flag=true;
-        }
-
-        printf("\n");
-        if(!flag) break;
-    }
-    for(int i=0; i<N; i++){
-        printf("node %d posx %f posy %f \n", i, posx[i], posy[i]);
     }
 }
 
@@ -344,18 +293,11 @@ __global__ void SortKernel(int* startd, int *sort, int *child, int *count,
         if (start >= 0) {
             for (int i = 0; i < 4; ++i) {
                 int childIdx = child[cell*4+i];
-                /*if(childIdx == 15){
-                    printf("child[15], count = %d\n", count[15]);
-                }*/
                 if (childIdx >= N) {
-                    //printf("   #case1: start = %d, i = %d, childIdx = %d\n",
-                    //       start, i, childIdx);
                     // child is a cell
                     startd[childIdx] = start;  // set start ID of child
                     start += count[childIdx];  // add #bodies in subtree
                 } else if (childIdx >= 0) {
-                    //printf("   #case2: start = %d, i = %d, childIdx = %d\n",
-                    //      start, i, childIdx);
                     // child is a body
                     sort[start] = childIdx;  // record body in 'sorted' array
                     ++start;
@@ -439,7 +381,6 @@ void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, in
                 while ((t = pos[depth]) < 4) {
                     // node on top of stack has more children to process
                     int childIdx = child[node[depth]*4+t];  // load child pointer
-					//if (v==2) printf("=== Depth %d, t %d, childIdx %d ===\n", depth, t, childIdx);
                     if (sbase == threadIdx.x) {
                         // I'm the first thread in the warp
                         pos[depth] = t + 1;
@@ -455,27 +396,19 @@ void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, in
 								float rf = repulsive_force(dist)*count[childIdx];
 								dispx += dx/dist*rf;//disp_x
 								dispy += dy/dist*rf;//disp_y
-								//if (v==2) printf("#case1: point %d with cell %d,dist: %f, repulsive force:%f\n", v,	childIdx, dist, rf);
 							}
 						} else {
                             // push cell onto stack
                             depth++;
                             if (sbase == threadIdx.x) {
-                              //  printf("add cell %d on the stack\n", childIdx);
 								node[depth] = childIdx;
                                 pos[depth] = 0;
                             }
-							//if (v==2) printf("#case2: point %d with cell%d, depth:%d\n", v, childIdx, depth);
                         }
-                    } //else {
-                      //  depth = max(j, depth - 1);  // early out because all remaining children are also zero
-                    //}
+                    }
                 }
                 depth--;  // done with this level
             }
-			//if(v==2) 
-			  //printf("AFTER RF:dispx:%f, dispy:%f\n",dispx,dispy);
-
             int start = 0;
             if (v > 0){
                 start = Idx[v-1];
@@ -487,18 +420,12 @@ void ForceCalculationKernel(float* posx, float* posy, int* child, int* count, in
                 float dist = sqrt(dx*dx+dy*dy);
 				dist = max(dist, 0.001);
                 float af = attractive_force(dist);
-				//printf("point %d edge=(%d, %d), force=%f\n", v, v, u, af);
-                //if(v==10) printf("u=%d, att_force= %f\n", u, af);
                 dispx -= dx/dist*af;
-                dispy -= dy/dist*af;
+            dispy  -= dy/dist*af;
             }
-			//if(v==2) 
-			  //printf("AFTER RF:dispx:%f, dispy:%f\n",dispx,dispy);
-
 
             dispX[v] = dispx;
             dispY[v] = dispy;
-            //printf("point %d disx %f disy %f\n", v, dispx, dispy);
         }
     }
 }
@@ -517,7 +444,6 @@ void UpdatePosKernel(float* posx, float* posy, float *dispX, float *dispY){
         py += (dist > thr) ? dispy / dist * thr : dispy;
         posx[v] = min(W / 2., max(-W / 2., px));
         posy[v] = min(H / 2., max(-H / 2., py));
-        //printf("point %d x %f y %f\n", v, posx[v], posy[v]);
     }
 }
 
@@ -527,7 +453,7 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
     typedef std::chrono::duration<double> dsec;
 
     dim3 blockDim(BLOCK_SIZE);
-    dim3 gridDim((N*2+1+BLOCK_SIZE-1)/BLOCK_SIZE);
+    dim3 gridDim(min((N*2+1+BLOCK_SIZE-1)/BLOCK_SIZE, 32));
     float alpha = 4;
     float eps = 0.0025;
     float thr = W+H;
@@ -552,8 +478,6 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
     float rooty;
     int node_num = N*2;
     int iter;
-    //===debug===//
-    int* host_child = new int [(node_num+1)*CELL_NUM];
 
     cudaMalloc(&posx, sizeof(float)*(node_num+1));
     cudaMalloc(&posy, sizeof(float)*(node_num+1));
@@ -586,11 +510,8 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
     //FORCE DIRECTED
     auto calc_start = Clock::now();
     for (iter = 0; iter < timesteps; iter++) {
-        //Calculating repulsive force
         //Calculating bounding box
-        printf("iter %d N %d\n", iter, N);
-		//printArray<<<1, 1>>>(posx, N);
-        //printArray<<<1, 1>>>(posy, N);
+        auto bounding_start = Clock::now();
         cudaDeviceSynchronize();
         minx = find_min(posx, N);
         maxx = find_max(posx, N);
@@ -600,58 +521,47 @@ void BH(float* hostx, float* hosty, Edge *E, int *Idx, int N, int M, float K, in
         radius *= 0.5;
         rootx = (minx+maxx)*0.5;
         rooty = (miny+maxy)*0.5;
-        //printf("rootx %f rooty %f radius %f\n", rootx, rooty, radius);
         cudaMemset(_bottom, node_num, 1);
         cudaMemset(_maxDepth, 0, 1);
+        cout << "bounding box:" << duration_cast<dsec>(Clock::now() - bounding_start).count() << endl;
+
         //Build Tree
+        auto build_start = Clock::now();
         init<<<1, 1>>>(_bottom, _maxDepth, node_num);
         cudaDeviceSynchronize();
         batch_set(child, CELL_NUM*(node_num+1), -1);
         BuildTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, _bottom, _maxDepth, radius, N, node_num, rootx, rooty);
         cudaDeviceSynchronize();
-        //printTree<<<1, 1>>>(posx, posy, child, node_num, N);
-        printf("build tree success!\n");
+        cout << "build tree:" << duration_cast<dsec>(Clock::now() - build_start).count() << endl;
 
         //Summerize Tree
+        auto summerize_start = Clock::now();
         batch_set(count+N, node_num-N, -1);
         batch_set(count, N, 1);
         SummarizeTreeKernel<<<gridDim, blockDim>>>(posx, posy, child, count, _bottom, node_num, N);
         cudaDeviceSynchronize();
-        //printTree<<<1, 1>>>(posx, posy, child, node_num, N);
+        cout << "summerize tree:" << duration_cast<dsec>(Clock::now() - summerize_start).count() << endl;
 
         //Sort
+        auto sort_start = Clock::now();
         batch_set(start,(node_num+1),0);
         batch_set(start+N, N, -1);
-        /*
-        cudaMemcpy(debug_start, start, sizeof(float)*(node_num+1), cudaMemcpyDeviceToHost);
-        for(int i = 0; i<=node_num; ++i){
-            //printf("%d ", debug_start[i]);
-        }
-        printf("\nPOS1\n");*/
-        //printf("node_num: %d, bottom: %d\n", node_num, (*_bottom));
         SortKernel<<<gridDim, blockDim>>>(start, sort, child, count, _bottom, node_num);
         cudaDeviceSynchronize();
-        
-        //cudaMemcpy(debug_sort, sort, sizeof(float)*N, cudaMemcpyDeviceToHost);
-        //for(int i = 0; i<N; ++i){
-        //    printf("%d ", debug_sort[i]);
-        //}
-        //printf("\n");
-        //Compute force //TODO try separate repulsive force and attractive force calculation
+        cout << "sort nodes:" << duration_cast<dsec>(Clock::now() - sort_start).count() << endl;
+
+        //Compute force
+        auto force_start = Clock::now();
         ForceCalculationKernel<<<gridDim, blockDim>>>(posx, posy, child, count, sort, deviceEdge, deviceIdx,
                 dispx, dispy, node_num, _maxDepth, radius);
         cudaDeviceSynchronize();
-        //printf("compute force\n");
-        //printArray<<<1, 1>>>(posx, N);
-        //printArray<<<1, 1>>>(posy, N);
-        //cudaDeviceSynchronize();
-        //thr *= 0.99; //TODO
+        cout << "compute force:" << duration_cast<dsec>(Clock::now() - force_start).count() << endl;
+
         //Update
+        auto update_start = Clock::now();
         UpdatePosKernel<<<gridDim, blockDim>>>(posx, posy, dispx, dispy);
         cudaDeviceSynchronize();
-        //printArray<<<1, 1>>>(posx, N);
-        //printArray<<<1, 1>>>(posy, N);
-        //cudaDeviceSynchronize();
+        cout << "update positions:" << duration_cast<dsec>(Clock::now() - update_start).count() << endl;
 
     }
     double calc_time = duration_cast<dsec>(Clock::now() - calc_start).count();
@@ -678,7 +588,6 @@ int main(int argc, char* argv[]){
     Edge e;
     for(int i=0; i<2*M; i+=2){
         infile >> e.idx1 >> e.idx2;
-        //cout<<e.idx1<<' '<<e.idx2<<endl;
         E[i] = e;
         swap(e.idx1, e.idx2);
         E[i+1] = e;
@@ -693,7 +602,6 @@ int main(int argc, char* argv[]){
     for(int i=1; i<N; ++i) {
         Idx[i] += Idx[i-1]; //End Index
     }
-    //cout<<"]"<<endl;
     cout << "Complete Initialization" << endl;
     int iteration = atoi(argv[2]);
     for(int i=0; i<N; i++){
