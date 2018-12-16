@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Merge stdout and stderr into one output file
+#PBS -j oe
+
+#PBS -q phi
+
+# Move to my $SCRATCH directory.
+cd $SCRATCH
+
+APP_NAME=omp # CHANGE THIS TO THE NAME OF YOUR PROGRAM
+
+# Set this to the important directory.
+execdir=/home/qiduh/618proj/15618-final-project # The directory that contains your wire routing program
+exe=$APP_NAME # The name of your wire routing program
+#input=data/Wiki-Vote.txt # The name of the input file
+inputname=Wiki-Vote.txt
+args="$inputname 100 236" #dataset name, number of iterations, number of threads
+inputdir=$execdir/data # The directory for test cases
+
+echo $inputname
+# Copy executable to $SCRATCH.
+cp $execdir/$exe $exe
+cp $inputdir/$inputname $inputname
+
+# Run my executable
+./$exe $args
