@@ -197,3 +197,6 @@ As is shown in the graph below, we have achieved a 300x speedup for WikiVote, a 
 - 1: One concern for us is how to explore locality and fully utilize the shared memory in each block. Since graph has random access pattern. How to reduce cache misses is a critical issue in further optimization.
 - 2: We also concerned about how to use data structures like quad-trees to trade-off between performance and quality. And how to use CUDA to accelerate this kind of computing.
 - 3: After all these experiments, we found that the dataset itself and the parameters we choose also affect the quality of the layout. So we still need to find some datasets that are suitable for this algorithm.
+
+# Final Report
+https://github.com/qdHe/15618-final-project/raw/master/618_final_report.pdf
